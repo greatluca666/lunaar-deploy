@@ -3,6 +3,12 @@ import type { Config, Context } from "@netlify/edge-functions";
 const TARGET = "https://lunaar.org";
 const FALLBACK_HEADER = "x-lunaar-fallback";
 
+// The in-site web proxy (Ultraviolet/Scramjet) tunnels every page it loads through a
+// WebSocket at `<this host>/wisp/`. Edge functions can't relay WebSockets, so point
+// those scripts straight at lunaar.org's wisp server instead.
+const WISP_HOST_PATTERN = /location\.host\s*\+\s*(["'`])\/wisp\//g;
+const WISP_HOST_REPLACEMENT = `"${new URL(TARGET).host}" + $1/wisp/`;
+
 // Headers that must not be copied between the client and the upstream request.
 const HOP_BY_HOP = [
   "connection",
@@ -77,6 +83,16 @@ export default async (req: Request, _context: Context) => {
     for (const c of cookies) {
       resHeaders.append("set-cookie", c.replace(/;\s*domain=[^;]*/i, ""));
     }
+  }
+
+  const contentType = resHeaders.get("content-type") ?? "";
+  if (/javascript|html/.test(contentType)) {
+    const text = (await upstream.text()).replace(WISP_HOST_PATTERN, WISP_HOST_REPLACEMENT);
+    return new Response(text, {
+      status: upstream.status,
+      statusText: upstream.statusText,
+      headers: resHeaders,
+    });
   }
 
   return new Response(upstream.body, {
