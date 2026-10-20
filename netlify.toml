@@ -1,0 +1,5 @@
+# Netlify can't run the long-lived Express server in index.js, so on Netlify the
+# proxy runs as an edge function (netlify/edge-functions/proxy.ts) instead.
+[build]
+  command = ""
+  publish = "static"
